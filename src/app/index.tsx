@@ -1,98 +1,116 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from "@clerk/expo";
+import { Image } from "expo-image";
+import { Redirect, useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { ArrowRight } from "lucide-react-native";
+import { useState } from "react";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { Wordmark } from "@/components/onboarding/brand";
+import { GoogleG } from "@/components/onboarding/google-g";
+import { LocationPill } from "@/components/onboarding/location-pill";
+import { PageDots } from "@/components/onboarding/page-dots";
+import { SheetCurve } from "@/components/onboarding/sheet-curve";
+import { slides } from "@/components/onboarding/slides";
+import { Button, Text } from "@/components/ui";
+import { motion } from "@/theme";
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+export default function Onboarding() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const [index, setIndex] = useState(0);
+  const [sheetHeight, setSheetHeight] = useState(0);
+  const { isLoaded, isSignedIn } = useAuth();
+  const slide = slides[index];
+
+  // A restored session skips onboarding.
+  if (!isLoaded) return null;
+  if (isSignedIn) return <Redirect href="/home" />;
+
+  const onPageChange = (e: NativeSyntheticEvent<NativeScrollEvent>) =>
+    setIndex(Math.round(e.nativeEvent.contentOffset.x / width));
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
+    <View className="flex-1 bg-surface">
+      <StatusBar style="dark" />
+
+      {/* Photos page; the header and sheet stay fixed on top. */}
+      <ScrollView
+        horizontal
+        pagingEnabled
+        bounces={false}
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={onPageChange}
+      >
+        {slides.map((s) => (
+          <View key={s.location} style={{ width, height }} className="bg-surface-alt">
+            <Image
+              source={{ uri: s.image }}
+              contentFit="cover"
+              transition={motion.base}
+              accessibilityIgnoresInvertColors
+              style={StyleSheet.absoluteFill}
+            />
+            {sheetHeight > 0 && (
+              <LocationPill label={s.location} style={{ position: "absolute", left: 24, bottom: sheetHeight + 20 }} />
+            )}
+          </View>
+        ))}
+      </ScrollView>
+
+      <View
+        pointerEvents="box-none"
+        className="absolute inset-x-0 flex-row items-center justify-between px-6"
+        style={{ top: insets.top + 16 }}
+      >
+        <Wordmark />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Skip"
+          onPress={() => router.push("/sign-in")}
+          className="h-10 justify-center rounded-full bg-glass px-4 active:opacity-70"
+        >
+          <Text variant="caption" className="text-ink">
+            Skip
+          </Text>
+        </Pressable>
+      </View>
+
+      <View className="absolute inset-x-0 bottom-0" onLayout={(e) => setSheetHeight(e.nativeEvent.layout.height)}>
+        <SheetCurve />
+        <View className="absolute inset-x-0 bottom-0 bg-surface" style={{ top: 63 }} />
+        <View className="px-6 pb-6 pt-7" style={{ paddingBottom: Math.max(insets.bottom, 24) }}>
+          <View className="px-1.5">
+            <PageDots count={slides.length} index={index} />
+          </View>
+          <Animated.View key={slide.location} entering={FadeIn.duration(motion.base)} className="px-1.5">
+            <Text variant="hero" accessibilityRole="header" className="mt-6">
+              {slide.title}
+            </Text>
+            <Text variant="lead" className="mt-3 min-h-[72px]">{slide.body}</Text>
+          </Animated.View>
+          <View className="mt-4 gap-3">
+            <Button title="Get started" trailingIcon={ArrowRight} onPress={() => router.push("/sign-up")} />
+            <Button
+              title="Continue with Google"
+              variant="secondary"
+              leadingNode={<GoogleG />}
+              onPress={() => router.push("/sign-in")}
+            />
+          </View>
+        </View>
+      </View>
+    </View>
   );
 }
-
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
-});
