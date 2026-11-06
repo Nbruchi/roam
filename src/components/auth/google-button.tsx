@@ -1,14 +1,15 @@
-import { useSSO } from "@clerk/expo/experimental";
+import { useSSO } from "@clerk/expo";
 import { useState } from "react";
 
 import { GoogleG } from "@/components/onboarding/google-g";
 import { Button } from "@/components/ui";
-import { authErrorMessage } from "@/lib/auth/errors";
+import { authErrorMessage, logAuthIssue } from "@/lib/auth/errors";
+import { ssoRedirectUrl } from "@/lib/auth/sso-redirect";
 
 /**
- * Google through Clerk's browser SSO flow (works in Expo Go). The Core 3 `useSSO` activates the
- * session itself. Calls onSuccess once signed in, or onError with a guest-facing message.
- * Closing the browser is not an error.
+ * Google through Clerk's browser SSO flow (stable `useSSO`, as in the airbnb-clone), returning to
+ * the URL from `ssoRedirectUrl()`. Calls onSuccess once signed in, or onError with a guest-facing
+ * message. Closing the browser is not an error.
  */
 export function GoogleButton({
   onSuccess,
@@ -34,12 +35,27 @@ export function GoogleButton({
       onPress={async () => {
         setLoading(true);
         try {
-          const { createdSessionId, authSessionResult } = await startSSOFlow({ strategy: "oauth_google" });
-          if (createdSessionId) return onSuccess();
-          // Cancelled or dismissed browser: stay put silently. Anything else didn't finish.
-          if (authSessionResult?.type === "success") onError(authErrorMessage(null));
+          const redirectUrl = ssoRedirectUrl();
+          logAuthIssue("google: starting", { redirectUrl });
+          const { createdSessionId, setActive, signUp, authSessionResult } = await startSSOFlow({
+            strategy: "oauth_google",
+            redirectUrl,
+          });
+          logAuthIssue("google: browser closed", {
+            type: authSessionResult?.type ?? "no session",
+            createdSessionId: !!createdSessionId,
+          });
+          if (createdSessionId && setActive) {
+            await setActive({ session: createdSessionId });
+            return onSuccess();
+          }
+          if (signUp?.status === "missing_requirements") {
+            logAuthIssue("google: sign-up missing fields", { missingFields: signUp.missingFields });
+            onError("We couldn't finish setting up your account. Try signing up with email.");
+          }
+          // Otherwise the guest closed the browser, which isn't an error.
         } catch (e) {
-          onError(authErrorMessage(e));
+          onError(authErrorMessage(e, "google: startSSOFlow()"));
         } finally {
           setLoading(false);
         }
