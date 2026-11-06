@@ -92,4 +92,4 @@ Built as planned. Changes while building:
 - Success leaves the auth stack with `finishAuth` (`src/lib/auth/finish.ts`: `dismissAll` when possible, then `replace("/home")`). Back from home can still reach onboarding until Clerk adds protected routes.
 - Back button visibility uses the `useCanGoBack` hook (correct during render).
 - `KeyboardAvoidingView` (`padding` on iOS, `height` on Android) wraps the scroll view.
-tsc, lint and the Android bundle export pass. Not yet checked on the phone.
+tsc, lint and the Android bundle export pass. Checked on the phone (Expo Go) against the design: matches, nothing failed.

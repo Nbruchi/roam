@@ -10,7 +10,7 @@ import { AuthScreen } from "@/components/auth/auth-screen";
 import { GoogleButton } from "@/components/auth/google-button";
 import { OrDivider } from "@/components/auth/or-divider";
 import { Alert, Button, Input } from "@/components/ui";
-import { authErrorMessage } from "@/lib/auth/errors";
+import { authErrorMessage, logAuthIssue } from "@/lib/auth/errors";
 import { afterFinalize, finishAuth } from "@/lib/auth/finish";
 import { firstError, validateEmail, validatePassword, type FieldErrors } from "@/lib/auth/validate";
 
@@ -46,11 +46,14 @@ export default function SignIn() {
     try {
       const email = values.email.trim();
       const attempt = await signIn.password({ emailAddress: email, password: values.password });
-      if (attempt.error) return setFormError(authErrorMessage(attempt.error));
+      if (attempt.error) return setFormError(authErrorMessage(attempt.error, "sign-in: password()"));
 
       if (signIn.status === "complete") {
-        const done = await signIn.finalize({ navigate: afterFinalize(router, () => setFormError(authErrorMessage(null))) });
-        if (done.error) setFormError(authErrorMessage(done.error));
+        const done = await signIn.finalize({ navigate: afterFinalize(router, () => {
+            logAuthIssue("sign-in: session has a pending task", {});
+            setFormError(authErrorMessage(null));
+          }) });
+        if (done.error) setFormError(authErrorMessage(done.error, "sign-in: finalize()"));
         return;
       }
 
@@ -58,14 +61,18 @@ export default function SignIn() {
       const emailFactor = signIn.supportedSecondFactors?.some((f) => f.strategy === "email_code");
       if ((signIn.status === "needs_client_trust" || signIn.status === "needs_second_factor") && emailFactor) {
         const sent = await signIn.mfa.sendEmailCode();
-        if (sent.error) return setFormError(authErrorMessage(sent.error));
+        if (sent.error) return setFormError(authErrorMessage(sent.error, "sign-in: send device code"));
         router.push({ pathname: "/verify", params: { email, flow: "sign-in" } });
         return;
       }
 
+      logAuthIssue("sign-in: unhandled status", {
+        status: signIn.status,
+        secondFactors: signIn.supportedSecondFactors?.map((f) => f.strategy),
+      });
       setFormError(authErrorMessage(null));
     } catch (e) {
-      setFormError(authErrorMessage(e));
+      setFormError(authErrorMessage(e, "sign-in: unexpected"));
     } finally {
       setSubmitting(false);
     }
