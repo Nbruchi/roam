@@ -10,8 +10,8 @@ import { AuthScreen } from "@/components/auth/auth-screen";
 import { GoogleButton } from "@/components/auth/google-button";
 import { OrDivider } from "@/components/auth/or-divider";
 import { Alert, Button, Input } from "@/components/ui";
-import { authErrorMessage, splitName } from "@/lib/auth/errors";
-import { finishAuth } from "@/lib/auth/finish";
+import { authErrorMessage, logAuthIssue, MISSING_FIELDS_MESSAGE, splitName } from "@/lib/auth/errors";
+import { afterFinalize, finishAuth } from "@/lib/auth/finish";
 import {
   firstError,
   validateEmail,
@@ -54,12 +54,28 @@ export default function SignUp() {
     try {
       const email = values.email.trim();
       const created = await signUp.password({ emailAddress: email, password: values.password, ...splitName(values.name) });
-      if (created.error) return setFormError(authErrorMessage(created.error));
+      if (created.error) return setFormError(authErrorMessage(created.error, "sign-up: password()"));
+      // An earlier attempt on this device already verified the email: nothing left to confirm.
+      if (signUp.status === "complete") {
+        const done = await signUp.finalize({
+          navigate: afterFinalize(router, () => {
+            logAuthIssue("sign-up: session has a pending task", {});
+            setFormError(authErrorMessage(null));
+          }),
+        });
+        if (done.error) setFormError(authErrorMessage(done.error, "sign-up: finalize()"));
+        return;
+      }
+      // Clerk wants a field this form doesn't collect: no code would ever finish this sign-up.
+      if (signUp.missingFields.length > 0) {
+        logAuthIssue("sign-up: missing fields", { status: signUp.status, missingFields: signUp.missingFields });
+        return setFormError(MISSING_FIELDS_MESSAGE);
+      }
       const sent = await signUp.verifications.sendEmailCode();
-      if (sent.error) return setFormError(authErrorMessage(sent.error));
+      if (sent.error) return setFormError(authErrorMessage(sent.error, "sign-up: sendEmailCode()"));
       router.push({ pathname: "/verify", params: { email, flow: "sign-up" } });
     } catch (e) {
-      setFormError(authErrorMessage(e));
+      setFormError(authErrorMessage(e, "sign-up: unexpected"));
     } finally {
       setSubmitting(false);
     }
