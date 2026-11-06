@@ -43,7 +43,7 @@ example
 /android
 
 # plain env file (secrets); .env.example is committed
-.env
 
 # agent skill links (machine-specific; real files live in .agents/skills)
 .claude/skills/
+config.bat
