@@ -7,7 +7,7 @@ import { AuthFooter } from "@/components/auth/auth-footer";
 import { AuthScreen } from "@/components/auth/auth-screen";
 import { CodeInput } from "@/components/auth/code-input";
 import { Alert, Button } from "@/components/ui";
-import { authErrorMessage } from "@/lib/auth/errors";
+import { authErrorMessage, logAuthIssue, MISSING_FIELDS_MESSAGE } from "@/lib/auth/errors";
 import { afterFinalize } from "@/lib/auth/finish";
 import { validateCode } from "@/lib/auth/validate";
 
@@ -51,7 +51,10 @@ export default function Verify() {
       : signIn.mfa.verifyEmailCode({ code: value });
 
   const finalize = (): Result => {
-    const navigate = afterFinalize(router, () => setError(FALLBACK));
+    const navigate = afterFinalize(router, () => {
+      logAuthIssue(`verify (${flow}): session has a pending task`, {});
+      setError(FALLBACK);
+    });
     return flow === "sign-up" ? signUp.finalize({ navigate }) : signIn.finalize({ navigate });
   };
 
@@ -64,12 +67,24 @@ export default function Verify() {
     setSubmitting(true);
     try {
       const verified = await verify(value);
-      if (verified.error) return setError(authErrorMessage(verified.error));
-      if ((flow === "sign-up" ? signUp.status : signIn.status) !== "complete") return setError(FALLBACK);
+      if (verified.error) return setError(authErrorMessage(verified.error, `verify (${flow}): verify code`));
+      if (flow === "sign-up" && signUp.status !== "complete") {
+        // The code was accepted, but Clerk still wants more before it creates the user.
+        logAuthIssue("verify (sign-up): code accepted but sign-up not complete", {
+          status: signUp.status,
+          missingFields: signUp.missingFields,
+          unverifiedFields: signUp.unverifiedFields,
+        });
+        return setError(MISSING_FIELDS_MESSAGE);
+      }
+      if (flow === "sign-in" && signIn.status !== "complete") {
+        logAuthIssue("verify (sign-in): code accepted but sign-in not complete", { status: signIn.status });
+        return setError(FALLBACK);
+      }
       const done = await finalize();
-      if (done.error) setError(authErrorMessage(done.error));
+      if (done.error) setError(authErrorMessage(done.error, `verify (${flow}): finalize()`));
     } catch (e) {
-      setError(authErrorMessage(e));
+      setError(authErrorMessage(e, `verify (${flow}): unexpected`));
     } finally {
       setSubmitting(false);
     }
@@ -87,11 +102,11 @@ export default function Verify() {
     try {
       const sent: Awaited<Result> =
         flow === "sign-up" ? await signUp.verifications.sendEmailCode() : await signIn.mfa.sendEmailCode();
-      if (sent.error) return setError(authErrorMessage(sent.error));
+      if (sent.error) return setError(authErrorMessage(sent.error, `verify (${flow}): resend code`));
       setResent(true);
       setWait(RESEND_SECONDS);
     } catch (e) {
-      setError(authErrorMessage(e));
+      setError(authErrorMessage(e, `verify (${flow}): resend unexpected`));
     } finally {
       setResending(false);
     }

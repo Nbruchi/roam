@@ -21,7 +21,7 @@ export default function Home() {
     try {
       await signOut();
     } catch (e) {
-      setError(authErrorMessage(e));
+      setError(authErrorMessage(e, "home: signOut()"));
       setSigningOut(false);
     }
   };
