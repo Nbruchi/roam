@@ -69,5 +69,6 @@ Create `src/app/(app)/_layout.tsx` and move `src/app/home.tsx` to `src/app/(app)
 ## Result
 Built as planned. `mock.ts` is gone, and every screen calls Clerk. tsc, lint and `expo export --platform android` pass. Changes from the plan:
 - Google uses `useSSO` from `@clerk/expo/experimental` (the v4 Core 3 variant that finalizes the session itself), not `setActive`.
-- The Clerk MCP config schema has no "sign in with password" switch, and the instance still reports password as not a first factor. It has to be turned on in the Dashboard (feedback sent to Clerk).
+- Password sign-in was already on. `used_for_first_factor: false` in `/v1/environment` is misleading; a test user's sign-in offers `password` as a first factor (checked via the Frontend API). No Dashboard change needed.
+- Follow-up fixes: first/last name were later made required in the Dashboard, which stranded one-word-name sign-ups after the code step; set back to optional and auth errors are now logged in dev. Google hung in Expo Go because SDK 58 Expo Go reports `executionEnvironment: "bare"`, so the default redirect was `roam://`; `ssoRedirectUrl()` now returns `exp://<hostUri>/--/sso-callback` in dev, and Google sign-in works on the phone.
 - On-device flows (Verification 1–9) not yet run.
